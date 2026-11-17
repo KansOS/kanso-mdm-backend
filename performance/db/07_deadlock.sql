@@ -1,0 +1,2 @@
+-- Two sessions with opposite lock acquisition order, each with lock_timeout.
+-- Use deadlock_test.sh to execute; do not run pgbench against this file.
