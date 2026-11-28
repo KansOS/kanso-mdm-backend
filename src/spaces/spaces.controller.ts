@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -12,8 +13,10 @@ import {
 } from '@nestjs/common';
 import {HelperId} from '../auth/helper-id.decorator';
 import {SessionAuthGuard} from '../auth/session-auth.guard';
+import {CreateContactDto} from './dto/create-contact.dto';
 import {CreateDeviceDto} from './dto/create-device.dto';
 import {CreateSpaceDto} from './dto/create-space.dto';
+import {UpdateContactDto} from './dto/update-contact.dto';
 import {UpdateDeviceDto} from './dto/update-device.dto';
 import {SpacesService} from './spaces.service';
 
@@ -26,6 +29,75 @@ export class SpacesController {
   @HttpCode(HttpStatus.CREATED)
   create(@HelperId() helperId: string, @Body() dto: CreateSpaceDto) {
     return this.spacesService.create(helperId, dto);
+  }
+
+  @Get(':spaceId/contacts')
+  async findContacts(
+    @HelperId() helperId: string,
+    @Param('spaceId') spaceId: string,
+  ) {
+    const contacts = await this.spacesService.findContactsForHelper(
+      helperId,
+      spaceId,
+    );
+    if (!contacts) {
+      throw new NotFoundException('Space not found.');
+    }
+    return contacts;
+  }
+
+  @Post(':spaceId/contacts')
+  @HttpCode(HttpStatus.CREATED)
+  async createContact(
+    @HelperId() helperId: string,
+    @Param('spaceId') spaceId: string,
+    @Body() dto: CreateContactDto,
+  ) {
+    const contact = await this.spacesService.createContactForHelper(
+      helperId,
+      spaceId,
+      dto,
+    );
+    if (!contact) {
+      throw new NotFoundException('Space not found.');
+    }
+    return contact;
+  }
+
+  @Patch(':spaceId/contacts/:contactId')
+  async updateContact(
+    @HelperId() helperId: string,
+    @Param('spaceId') spaceId: string,
+    @Param('contactId') contactId: string,
+    @Body() dto: UpdateContactDto,
+  ) {
+    const contact = await this.spacesService.updateContactForHelper(
+      helperId,
+      spaceId,
+      contactId,
+      dto,
+    );
+    if (!contact) {
+      throw new NotFoundException('Contact not found.');
+    }
+    return contact;
+  }
+
+  @Delete(':spaceId/contacts/:contactId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteContact(
+    @HelperId() helperId: string,
+    @Param('spaceId') spaceId: string,
+    @Param('contactId') contactId: string,
+  ) {
+    const deleted = await this.spacesService.deleteContactForHelper(
+      helperId,
+      spaceId,
+      contactId,
+    );
+    if (!deleted) {
+      throw new NotFoundException('Contact not found.');
+    }
   }
 
   @Post(':spaceId/devices')

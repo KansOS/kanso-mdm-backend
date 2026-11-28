@@ -1,12 +1,23 @@
-import {ConflictException, Injectable} from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import {Prisma} from '@prisma/client';
 import {randomInt} from 'node:crypto';
 import {SecretCipherService} from '../auth/secret-cipher.service';
 import {PrismaService} from '../prisma/prisma.service';
+import {CreateContactDto} from './dto/create-contact.dto';
 import {CreateSpaceDto} from './dto/create-space.dto';
+import {UpdateContactDto} from './dto/update-contact.dto';
 
 const PAIRING_CODE_TTL_MS = 15 * 60 * 1000;
 const SPACE_SELECT = {id: true, pseudonym: true, createdAt: true} as const;
+const CONTACT_SELECT = {
+  id: true,
+  identifier: true,
+  trustLevel: true,
+} as const;
 const DEVICE_SELECT = {
   id: true,
   pseudonym: true,
@@ -53,6 +64,104 @@ export class SpacesService {
       create: {spaceId, helperId},
       update: {},
     });
+  }
+
+  async findContactsForHelper(helperId: string, spaceId: string) {
+    const space = await this.prisma.space.findFirst({
+      where: {id: spaceId, memberships: {some: {helperId}}},
+      select: {id: true},
+    });
+
+    if (!space) {
+      return null;
+    }
+
+    return this.prisma.contact.findMany({
+      where: {spaceId: space.id},
+      orderBy: {id: 'asc'},
+      select: CONTACT_SELECT,
+    });
+  }
+
+  async createContactForHelper(
+    helperId: string,
+    spaceId: string,
+    dto: CreateContactDto,
+  ) {
+    const space = await this.prisma.space.findFirst({
+      where: {id: spaceId, memberships: {some: {helperId}}},
+      select: {id: true},
+    });
+
+    if (!space) {
+      return null;
+    }
+
+    return this.prisma.contact.create({
+      data: {
+        spaceId: space.id,
+        identifier: dto.identifier,
+        trustLevel: dto.trustLevel,
+      },
+      select: CONTACT_SELECT,
+    });
+  }
+
+  async updateContactForHelper(
+    helperId: string,
+    spaceId: string,
+    contactId: string,
+    dto: UpdateContactDto,
+  ) {
+    if (dto.identifier === undefined && dto.trustLevel === undefined) {
+      throw new BadRequestException(
+        'At least one contact field must be provided.',
+      );
+    }
+
+    const contact = await this.prisma.contact.findFirst({
+      where: {
+        id: contactId,
+        spaceId,
+        space: {memberships: {some: {helperId}}},
+      },
+      select: {id: true},
+    });
+
+    if (!contact) {
+      return null;
+    }
+
+    return this.prisma.contact.update({
+      where: {id: contact.id},
+      data: {
+        ...(dto.identifier !== undefined ? {identifier: dto.identifier} : {}),
+        ...(dto.trustLevel !== undefined ? {trustLevel: dto.trustLevel} : {}),
+      },
+      select: CONTACT_SELECT,
+    });
+  }
+
+  async deleteContactForHelper(
+    helperId: string,
+    spaceId: string,
+    contactId: string,
+  ): Promise<boolean> {
+    const contact = await this.prisma.contact.findFirst({
+      where: {
+        id: contactId,
+        spaceId,
+        space: {memberships: {some: {helperId}}},
+      },
+      select: {id: true},
+    });
+
+    if (!contact) {
+      return false;
+    }
+
+    await this.prisma.contact.delete({where: {id: contact.id}});
+    return true;
   }
 
   async findDevicesForHelper(helperId: string, spaceId: string) {
